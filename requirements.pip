@@ -7,3 +7,4 @@
 twisted==13.1.0
 zope.interface==4.0.5
 pyaudio>=0.2.7
+PyGTK>=2.24.0
