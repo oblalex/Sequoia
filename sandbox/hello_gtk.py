@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import pygtk
 pygtk.require('2.0')
@@ -69,7 +70,8 @@ class HelloWorld:
         # and the window
         self.window.show()
 
-def main(self):
+
+def main():
     hello = HelloWorld()
     # All PyGTK applications must have a gtk.main(). Control ends here
     # and waits for an event to occur (like a key press or mouse event).

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import pyaudio
 
 CHUNK = 1024
