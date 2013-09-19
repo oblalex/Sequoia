@@ -4,11 +4,11 @@
 from twisted.internet import gtk2reactor
 gtk2reactor.install()
 
-from hello_gtk import HelloWorld
+from hello_glade import HelloWorldGlade
 
 
 def main():
-    hello = HelloWorld()
+    hello = HelloWorldGlade()
 
     from twisted.internet import reactor
     reactor.run()
