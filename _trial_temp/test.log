@@ -1,0 +1,3 @@
+2013-09-19 20:04:40+0300 [-] Log opened.
+2013-09-19 20:04:40+0300 [-] --> sequoia.tests.test_gost.GOSTTestCase.test_right_keys <--
+2013-09-19 20:04:40+0300 [-] --> sequoia.tests.test_gost.GOSTTestCase.test_wrong_keys <--

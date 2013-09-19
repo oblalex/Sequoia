@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
-# example helloworld.py
-
 import pygtk
 pygtk.require('2.0')
 import gtk
+
 
 class HelloWorld:
 
@@ -70,13 +69,13 @@ class HelloWorld:
         # and the window
         self.window.show()
 
-    def main(self):
-        # All PyGTK applications must have a gtk.main(). Control ends here
-        # and waits for an event to occur (like a key press or mouse event).
-        gtk.main()
+def main(self):
+    hello = HelloWorld()
+    # All PyGTK applications must have a gtk.main(). Control ends here
+    # and waits for an event to occur (like a key press or mouse event).
+    gtk.main()
 
 # If the program is run directly or passed as an argument to the python
 # interpreter then create a HelloWorld instance and show it
 if __name__ == "__main__":
-    hello = HelloWorld()
-    hello.main()
+    main()
