@@ -4,7 +4,6 @@ import sys
 sys.path.append("../sequoia")
 
 import pyaudio
-import struct
 
 from sequoia.gost import GOST
 
@@ -29,11 +28,10 @@ def main():
         lut_dec[enc] = x
 
     def callback(in_data, frame_count, time_info, status):
-        fmt_suffix = 'B'*len(in_data)
-        bytes = struct.unpack('<' + fmt_suffix, in_data)
+        bytes = [ord(x) for x in in_data]
         encrypted = [lut_enc[x] for x in bytes]
         decrypted = [lut_dec[x] for x in encrypted]
-        bytes = struct.pack('>' + fmt_suffix, *decrypted)
+        bytes = ''.join([chr(x) for x in decrypted])
         return (bytes, pyaudio.paContinue)
 
     p = pyaudio.PyAudio()
