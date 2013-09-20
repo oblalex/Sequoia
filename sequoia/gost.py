@@ -2,7 +2,10 @@
 
 
 class GOST(object):
-
+    """
+    A bit refactored version of
+    https://raw.github.com/bozhu/GOST-Python/master/gost.py
+    """
     sbox = (
         (4, 10, 9, 2, 13, 8, 0, 14, 6, 11, 1, 12, 7, 15, 5, 3),
         (14, 11, 4, 12, 6, 13, 15, 10, 2, 3, 8, 1, 0, 7, 5, 9),
