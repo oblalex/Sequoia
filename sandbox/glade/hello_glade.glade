@@ -12,7 +12,7 @@
         <property name="can_focus">False</property>
         <child>
           <object class="GtkToggleButton" id="togglebutton">
-            <property name="label" translatable="yes">togglebutton</property>
+            <property name="label" translatable="yes">Run sound</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
@@ -27,7 +27,7 @@
         </child>
         <child>
           <object class="GtkCheckButton" id="checkbox">
-            <property name="label" translatable="yes">checkbutton</property>
+            <property name="label" translatable="yes">Use wrong decryption key</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">False</property>

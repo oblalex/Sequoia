@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append("../sequoia")
+sys.path.append("..")
 
 import pyaudio
 
