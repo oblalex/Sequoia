@@ -23,6 +23,7 @@ pip-log.txt
 
 # Unit test / coverage reports
 .coverage
+.coveralls.yml
 .tox
 nosetests.xml
 
@@ -33,3 +34,8 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+# Twisted
+_trial_temp
+*.log
+*.pid
