@@ -39,3 +39,7 @@ nosetests.xml
 _trial_temp
 *.log
 *.pid
+
+# GNU C
+*.o
+*.so

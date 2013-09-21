@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 
+import itertools
+import os
+import struct
 import sys
-sys.path.append("..")
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import pyaudio
 
-from sequoia.gost import GOST
+from sequoia.gost.gost import GOST
 
 
 WIDTH = 2
@@ -15,24 +19,16 @@ RATE = 16000
 
 def main():
 
-    key = 0x1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff
-    cipher = GOST()
-    cipher.set_key(key)
-
-    # Using Look-up tables to increase performance
-    lut_enc = []
-    lut_dec = {}
-    for x in xrange(256):
-        enc = cipher.encrypt(x)
-        lut_enc.append(enc)
-        lut_dec[enc] = x
+    key = tuple(range(8))
+    cipher = GOST(key)
 
     def callback(in_data, frame_count, time_info, status):
-        bytes = [ord(x) for x in in_data]
-        encrypted = [lut_enc[x] for x in bytes]
-        decrypted = [lut_dec[x] for x in encrypted]
-        bytes = ''.join([chr(x) for x in decrypted])
-        return (bytes, pyaudio.paContinue)
+        dlen = frame_count*WIDTH
+        din = [struct.unpack(">LL", in_data[i:i+8]) for i in xrange(0, dlen, 8)]
+        enc_out = [cipher.encrypt(x) for x in din]
+        dec_out = [cipher.decrypt(x) for x in enc_out]
+        out = struct.pack(">"+'L'*(dlen/4), *list(itertools.chain(*dec_out)))
+        return (out, pyaudio.paContinue)
 
     p = pyaudio.PyAudio()
     stream = p.open(format=p.get_format_from_width(WIDTH),

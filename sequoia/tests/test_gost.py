@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
 
 from twisted.trial.unittest import TestCase
+from random import randint
 
-from sequoia.gost import GOST
+from sequoia.gost.gost import GOST
 
 
 class GOSTTestCase(TestCase):
 
     def setUp(self):
-        self.text = 0xfedcba0987654321
-        self.key = 0x1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff
-        self.cipher = GOST()
-        self.cipher.set_key(self.key)
+        self.text = (100, 200)
+        self.key = self._get_key()
+        self.cipher = GOST(self.key)
+
+    def _get_key(self):
+        return tuple([randint(0, 32000) for _ in range(8)])
 
     def test_right_keys(self):
         encrypted = self.cipher.encrypt(self.text)
@@ -24,8 +27,7 @@ class GOSTTestCase(TestCase):
         encrypted = self.cipher.encrypt(self.text)
         self.assertNotEqual(self.text, encrypted)
 
-        new_key = 0xffff1111222233334444555566667777888899990000aaaabbbbccccddddeeee
-        self.cipher.set_key(new_key)
+        self.cipher.set_key(self._get_key())
 
         decrypted = self.cipher.decrypt(encrypted)
         self.assertNotEqual(self.text, decrypted)
