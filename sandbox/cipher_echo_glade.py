@@ -30,23 +30,15 @@ class EchoCipherGlade(HelloWorldGlade):
     def __init__(self, audio):
         super(EchoCipherGlade, self).__init__()
         self.audio = audio
-        self.good_key = get_key()
-        self.bad_key = get_key()
-        self.cipher = GOST(self.good_key)
-        self.wrong_decoding = False
+        self.cipher_one = GOST(get_key())
+        self.cipher_two = GOST(get_key())
+        self.cipher = self.decipher = self.cipher_one
 
     def callback(self, in_data, frame_count, time_info, status):
         dlen = frame_count*WIDTH
         din = [struct.unpack(">LL", in_data[i:i+8]) for i in xrange(0, dlen, 8)]
         enc_out = [self.cipher.encrypt(x) for x in din]
-
-        if self.wrong_decoding:
-            self.cipher.set_key(self.bad_key)
-            dec_out = [self.cipher.decrypt(x) for x in enc_out]
-            self.cipher.set_key(self.good_key)
-        else:
-            dec_out = [self.cipher.decrypt(x) for x in enc_out]
-
+        dec_out = [self.decipher.decrypt(x) for x in enc_out]
         out = struct.pack(">"+'L'*(dlen/4), *list(itertools.chain(*dec_out)))
         return (out, pyaudio.paContinue)
 
@@ -61,7 +53,7 @@ class EchoCipherGlade(HelloWorldGlade):
             reactor.callLater(0, self.stream.close)
 
     def on_checkbox_toggled(self, widget, data=None):
-        self.wrong_decoding = widget.get_active()
+        self.decipher = self.cipher_two if widget.get_active() else self.cipher_one
 
     def delete_event(self, widget, event, data=None):
         self.audio.terminate()
