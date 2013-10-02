@@ -6,6 +6,6 @@
 
 twisted==13.1.0
 zope.interface==4.0.5
+PyGTK>=2.24.0
 pyaudio>=0.2.7
 pyspeex>=1.0
-PyGTK>=2.24.0
