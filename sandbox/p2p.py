@@ -67,7 +67,6 @@ class MainWindow(object):
     def __init__(self, audio):
         self.audio = audio
         self.spx = speex.new()
-        self.buf = ''
 
         gladefile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glade/p2p.glade")
         self.wTree = gtk.Builder()
@@ -80,7 +79,7 @@ class MainWindow(object):
 
         self.w_local_address = self.wTree.get_object('local_address')
         self.w_remote_address = self.wTree.get_object('remote_address')
-
+        self.wnd = self.wTree.get_object('wnd')
         dic = {
             'on_run_conversation_toggled' : self.on_run_conversation_toggled,
             'on_local_key_focus_out_event': self.on_local_key_focus_out_event,
@@ -88,7 +87,7 @@ class MainWindow(object):
             'on_wnd_delete_event': self.delete_event,
         }
         self.wTree.connect_signals(dic)
-        self.wTree.get_object('wnd').show()
+        self.wnd.show()
 
     def on_run_conversation_toggled(self, widget):
         is_active = widget.get_active()
@@ -110,6 +109,7 @@ class MainWindow(object):
     def run_conversation(self, (address, port), remote_address):
 
         def on_network_start(_):
+            self.buf = ''
             self.stream = self.audio.open(
                 format=self.audio.get_format_from_width(WIDTH),
                 channels=CHANNELS, rate=RATE,
@@ -142,8 +142,9 @@ class MainWindow(object):
         out = struct.pack(
             '>'+'L'*(enc_len/4), *list(itertools.chain(*enc_out)))
 
-        # Send to peer
-        self.protocol.send_data(out)
+        if self.protocol:
+            # Send to peer
+            self.protocol.send_data(out)
 
         # Get received data or silence
         idx = min(len(self.buf), dlen)
@@ -164,12 +165,10 @@ class MainWindow(object):
             for i in xrange(0, dlen, 8)]
         dec_out = [self.decipher.decrypt(x) for x in din]
         dec = struct.pack('>'+'L'*(dlen/4), *list(itertools.chain(*dec_out)))
-
         # Decode with speex
         spx_out = self.spx.decode(dec)
         if spx_out:
             out = struct.pack('h'*len(spx_out), *spx_out)
-
             # Put to buffer
             self.buf += out
 
