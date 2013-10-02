@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk+" version="2.24"/>
+  <!-- interface-naming-policy project-wide -->
+  <object class="GtkWindow" id="wnd">
+    <property name="can_focus">False</property>
+    <property name="title" translatable="yes">Secure P2P conversation</property>
+    <property name="window_position">center</property>
+    <signal name="delete-event" handler="on_wnd_delete_event" swapped="no"/>
+    <child>
+      <object class="GtkVBox" id="vbox1">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <child>
+          <object class="GtkTable" id="table1">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="n_rows">4</property>
+            <property name="n_columns">2</property>
+            <child>
+              <object class="GtkLabel" id="label1">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Local address</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="label2">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Local key</property>
+              </object>
+              <packing>
+                <property name="top_attach">1</property>
+                <property name="bottom_attach">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="local_address">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="invisible_char">•</property>
+                <property name="text" translatable="yes">127.0.0.1:9998</property>
+                <property name="primary_icon_activatable">False</property>
+                <property name="secondary_icon_activatable">False</property>
+                <property name="primary_icon_sensitive">True</property>
+                <property name="secondary_icon_sensitive">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="right_attach">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="local_key">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="max_length">32</property>
+                <property name="invisible_char">•</property>
+                <property name="text" translatable="yes">11111111111111111111111111111111</property>
+                <property name="primary_icon_activatable">False</property>
+                <property name="secondary_icon_activatable">False</property>
+                <property name="primary_icon_sensitive">True</property>
+                <property name="secondary_icon_sensitive">True</property>
+                <signal name="focus-out-event" handler="on_local_key_focus_out_event" swapped="no"/>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="right_attach">2</property>
+                <property name="top_attach">1</property>
+                <property name="bottom_attach">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="label3">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Remote address</property>
+              </object>
+              <packing>
+                <property name="top_attach">2</property>
+                <property name="bottom_attach">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="label4">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Remote key</property>
+              </object>
+              <packing>
+                <property name="top_attach">3</property>
+                <property name="bottom_attach">4</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="remote_address">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="invisible_char">•</property>
+                <property name="text" translatable="yes">127.0.0.1:9999</property>
+                <property name="invisible_char_set">True</property>
+                <property name="primary_icon_activatable">False</property>
+                <property name="secondary_icon_activatable">False</property>
+                <property name="primary_icon_sensitive">True</property>
+                <property name="secondary_icon_sensitive">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="right_attach">2</property>
+                <property name="top_attach">2</property>
+                <property name="bottom_attach">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="remote_key">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="max_length">32</property>
+                <property name="invisible_char">•</property>
+                <property name="text" translatable="yes">22222222222222222222222222222222</property>
+                <property name="invisible_char_set">True</property>
+                <property name="primary_icon_activatable">False</property>
+                <property name="secondary_icon_activatable">False</property>
+                <property name="primary_icon_sensitive">True</property>
+                <property name="secondary_icon_sensitive">True</property>
+                <signal name="focus-out-event" handler="on_remote_key_focus_out_event" swapped="no"/>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="right_attach">2</property>
+                <property name="top_attach">3</property>
+                <property name="bottom_attach">4</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkHSeparator" id="hseparator1">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="run_conversation">
+            <property name="label" translatable="yes">Run conversation</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">True</property>
+            <property name="use_action_appearance">False</property>
+            <signal name="toggled" handler="on_run_conversation_toggled" swapped="no"/>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

@@ -21,9 +21,11 @@ from sequoia.gost.gost import GOST
 def get_key():
     return tuple([randint(0, 32000) for _ in range(8)])
 
+
 WIDTH = 2
 CHANNELS = 1
 RATE = 16000
+
 
 class EchoCipherGlade(HelloWorldGlade):
 
@@ -36,10 +38,10 @@ class EchoCipherGlade(HelloWorldGlade):
 
     def callback(self, in_data, frame_count, time_info, status):
         dlen = frame_count*WIDTH
-        din = [struct.unpack(">LL", in_data[i:i+8]) for i in xrange(0, dlen, 8)]
+        din = [struct.unpack('>LL', in_data[i:i+8]) for i in xrange(0, dlen, 8)]
         enc_out = [self.cipher.encrypt(x) for x in din]
         dec_out = [self.decipher.decrypt(x) for x in enc_out]
-        out = struct.pack(">"+'L'*(dlen/4), *list(itertools.chain(*dec_out)))
+        out = struct.pack('>'+'L'*(dlen/4), *list(itertools.chain(*dec_out)))
         return (out, pyaudio.paContinue)
 
     def on_togglebutton_toggled(self, widget, data=None):
