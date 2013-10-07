@@ -2,6 +2,8 @@
 
 apt-get install python2.7-dev python-pip python-gtk2 libspeex-dev libportaudio2
 
+pip install -r requirements.pip
+
 wget http://people.csail.mit.edu/hubert/pyaudio/packages/python-pyaudio_0.2.7-1_i386.deb -O /tmp/python-pyaudio.deb
 dpkg -i /tmp/python-pyaudio.deb
 
