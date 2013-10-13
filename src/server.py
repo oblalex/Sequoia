@@ -1,40 +1,46 @@
 # -*- coding: utf-8 -*-
 
-from OpenSSL import SSL
-from twisted.internet import ssl, reactor
-from twisted.internet.protocol import Factory
+import optparse
 
-from sequoia.protocol import EchoServer
+from twisted.internet import reactor
+
+from sequoia.protocol import EchoServerFactory
+from sequoia.security import ServerContextFactory
 
 
-def verifyCallback(connection, x509, errnum, errdepth, ok):
-    if not ok:
-        print "invalid cert from subject:", x509.get_subject()
-        return False
-    else:
-        print "Certs are fine"
-    return True
+def parse_args():
+    usage = """usage: %prog --host=HOST --cport=CPORT --mport=MPORT"""
+    parser = optparse.OptionParser(usage)
+
+    help = "Host to run server on. Default: localhost"
+    parser.add_option('--host', default='localhost', help=help)
+
+    help = "Port for clients to connect to. Default: 0"
+    parser.add_option('--cport', type='int', default=0, help=help)
+
+    help = "Port for receiving media data. Default: 0"
+    parser.add_option('--mport', type='int', default=0, help=help)
+
+    options, args = parser.parse_args()
+    return options.host, options.cport, options.mport
 
 
 def main():
-    factory = Factory()
-    factory.protocol = EchoServer
+    host, cport, mport = parse_args()
 
-    myContextFactory = ssl.DefaultOpenSSLContextFactory(
-        "sequoia/tests/auth/server.key", "sequoia/tests/auth/server.crt")
+    factory = EchoServerFactory()
+    ctx_factory = ServerContextFactory(
+        "sequoia/tests/auth/server.key",
+        "sequoia/tests/auth/server.crt",
+        "sequoia/tests/auth/root_ca.pem")
 
-    ctx = myContextFactory.getContext()
-    ctx.set_verify(
-        SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT,
-        verifyCallback)
-    ctx.load_verify_locations("sequoia/tests/auth/root_ca.pem")
+    listener = reactor.listenSSL(cport, factory, ctx_factory, interface=host)
+    host_info = listener.getHost()
+    print "Listening clients on {host}:{port}.".format(
+        host=host_info.host, port=host_info.port)
 
-    reactor.listenSSL(8000, factory, myContextFactory)
     reactor.run()
 
 
 if __name__ == "__main__":
-    if __package__ is None:
-        from os import sys, path
-        sys.path.append(path.dirname(path.abspath(__file__)))
     main()
