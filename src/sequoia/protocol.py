@@ -1,12 +1,31 @@
 # -*- coding: utf-8 -*-
-from twisted.internet.protocol import ClientFactory, Factory, Protocol
+
+from twisted.internet.protocol import ClientFactory, Factory
+from twisted.protocols import amp
 
 
-class EchoServer(Protocol):
+class UserUnknown(Exception):
+    pass
 
-    def dataReceived(self, data):
-        print self.transport.getPeerCertificate().get_serial_number()
-        self.transport.write(data)
+
+class RegisterUser(amp.Command):
+    arguments = [
+        ('mport', amp.Integer()),
+    ]
+    response = [
+        ('mport', amp.Integer()),
+    ]
+    errors = {
+        UserUnknown: 'user_unknown',
+    }
+
+
+class EchoServer(amp.AMP):
+
+    @RegisterUser.responder
+    def register(self, mport):
+        print self.transport.getPeerCertificate().get_serial_number(), mport
+        return {'mport': 9966}
 
 
 class EchoServerFactory(Factory):
@@ -14,15 +33,8 @@ class EchoServerFactory(Factory):
     protocol = EchoServer
 
 
-class EchoClient(Protocol):
-
-    def connectionMade(self):
-        print "hello, world"
-        self.transport.write("hello, world!")
-
-    def dataReceived(self, data):
-        print "Server said:", data
-        self.transport.loseConnection()
+class EchoClient(amp.AMP):
+    pass
 
 
 class EchoClientFactory(ClientFactory):

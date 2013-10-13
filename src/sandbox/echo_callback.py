@@ -4,7 +4,7 @@ import pyaudio
 import time
 
 WIDTH = 2
-CHANNELS = 2
+CHANNELS = 1
 RATE = 44100
 
 p = pyaudio.PyAudio()
