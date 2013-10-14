@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from twisted.internet.protocol import ClientFactory, Factory
+from twisted.internet.protocol import ClientFactory, Factory, DatagramProtocol
 from twisted.protocols import amp
+from twisted.python import log
 
 
 class UserUnknown(Exception):
@@ -20,26 +21,37 @@ class RegisterUser(amp.Command):
     }
 
 
-class EchoServer(amp.AMP):
+class ServerProtocol(amp.AMP):
 
     @RegisterUser.responder
     def register(self, mport):
         print self.transport.getPeerCertificate().get_serial_number(), mport
-        return {'mport': 9966}
+        return {
+            'mport': self.factory.get_media_port(),
+        }
 
 
-class EchoServerFactory(Factory):
+class ServerClientsFactory(Factory):
 
-    protocol = EchoServer
+    protocol = ServerProtocol
+
+    def __init__(self):
+        self.media_tx = MediaProtocol()
+
+    def get_media_port(self):
+        return self.media_tx.transport.getHost().port
 
 
-class EchoClient(amp.AMP):
+class ClientProtocol(amp.AMP):
     pass
 
 
-class EchoClientFactory(ClientFactory):
+class ClientFactory(ClientFactory):
 
-    protocol = EchoClient
+    protocol = ClientProtocol
+
+    def __init__(self):
+        self.media_tx = MediaProtocol()
 
     def clientConnectionFailed(self, connector, reason):
         print "Connection failed - goodbye!"
@@ -50,3 +62,18 @@ class EchoClientFactory(ClientFactory):
         print "Connection lost - goodbye!"
         from twisted.internet import reactor
         reactor.stop()
+
+
+class MediaProtocol(DatagramProtocol):
+
+    def __init__(self, address=None):
+        # add codec and ciphers
+        self.address = address
+        self.buffer_in = ""
+        self.buffer_out = ""
+
+    def datagramReceived(self, data, address):
+        if self.address is not None and address != self.address:
+            log.msg("Message from unknown peer: {0}:{1}.".format(*address))
+            return
+        log.msg("Incoming {0} bytes from {1}:{2}.".format(len(data), *address))

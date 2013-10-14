@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import optparse
+import sys
 
 from twisted.internet import reactor
+from twisted.python import log
 
-from sequoia.protocol import EchoServerFactory
+from sequoia.protocol import ServerClientsFactory, MediaProtocol
 from sequoia.security import ServerContextFactory
 
 
@@ -25,19 +27,29 @@ def parse_args():
     return options.host, options.cport, options.mport
 
 
+def show_connector_info(connector, description):
+    info = connector.getHost()
+    log.msg("{0} on {1}:{2}.".format(description, info.host, info.port))
+
+
 def main():
+    log.startLogging(sys.stdout)
+
     host, cport, mport = parse_args()
 
-    factory = EchoServerFactory()
+    clients_factory = ServerClientsFactory()
     ctx_factory = ServerContextFactory(
         "sequoia/tests/auth/server.key",
         "sequoia/tests/auth/server.crt",
         "sequoia/tests/auth/root_ca.pem")
 
-    listener = reactor.listenSSL(cport, factory, ctx_factory, interface=host)
-    host_info = listener.getHost()
-    print "Listening clients on {host}:{port}.".format(
-        host=host_info.host, port=host_info.port)
+    clients_listener = reactor.listenSSL(cport, clients_factory, ctx_factory,
+        interface=host)
+    show_connector_info(clients_listener, "Listening clients")
+
+    media_listener = reactor.listenUDP(mport, clients_factory.media_tx,
+        interface=host)
+    show_connector_info(media_listener, "Serving media")
 
     reactor.run()
 

@@ -5,20 +5,23 @@ from OpenSSL.SSL import Error as SSLError
 from twisted.internet.endpoints import SSL4ClientEndpoint
 from twisted.internet import defer, reactor
 
-from sequoia.protocol import EchoClientFactory, RegisterUser
+from sequoia.protocol import ClientFactory, RegisterUser
 from sequoia.security import ClientCtxFactory
 
 
 def connect(host, port):
 
     def done(protocol):
-        return protocol.callRemote(RegisterUser, mport=9988)
+        media_listener = reactor.listenUDP(0, factory.media_tx,
+            interface=host)
+        return protocol.callRemote(RegisterUser,
+            mport=media_listener.getHost().port)
 
     def failed(err):
         err.trap(SSLError)
         return defer.fail(Exception("Invalid SSL credentials."))
 
-    factory = EchoClientFactory()
+    factory = ClientFactory()
     ctx_factory = ClientCtxFactory(
         "sequoia/tests/auth/client.key",
         "sequoia/tests/auth/client.crt")
