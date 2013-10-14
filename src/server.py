@@ -3,6 +3,8 @@
 import optparse
 import sys
 
+from twistar.registry import Registry
+from twisted.enterprise import adbapi
 from twisted.internet import reactor
 from twisted.python import log
 
@@ -36,6 +38,9 @@ def main():
     log.startLogging(sys.stdout)
 
     host, cport, mport = parse_args()
+
+    Registry.DBPOOL = adbapi.ConnectionPool(
+        'sqlite3', "sequoia/tests/auth/sequoia.db", check_same_thread=False)
 
     clients_factory = ServerClientsFactory()
     ctx_factory = ServerContextFactory(

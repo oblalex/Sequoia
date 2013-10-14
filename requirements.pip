@@ -7,3 +7,5 @@
 twisted==13.1.0
 zope.interface==4.0.5
 pyOpenSSL==0.13.1
+twistar==1.0.0
+simplejson==3.3.1
