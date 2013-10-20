@@ -11,7 +11,7 @@ from twisted.python import log
 
 
 def parse_args():
-    usage = """usage: %prog --path=PATH"""
+    usage = """usage: %prog [--path=PATH]"""
     parser = optparse.OptionParser(usage)
 
     help = "Path to create database on. Default: sequoia.db"

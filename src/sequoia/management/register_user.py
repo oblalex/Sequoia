@@ -33,8 +33,8 @@ def parse_args():
     help = "Client's nick name."
     parser.add_option('--nick', help=help)
 
-    help = "Path to output file. Default: sequoia.keys"
-    parser.add_option('--out', default='sequoia.keys', help=help)
+    help = "Path to output file. Default: media.keys"
+    parser.add_option('--out', default='media.keys', help=help)
 
     options, args = parser.parse_args()
 

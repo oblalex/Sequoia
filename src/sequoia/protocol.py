@@ -26,6 +26,24 @@ class RegisterUser(amp.Command):
     }
 
 
+class UserJoined(amp.Command):
+    arguments = [
+        ('nick', amp.Unicode()),
+    ]
+    response = [
+        ('ack', amp.Boolean()),
+    ]
+
+
+class UserLeft(amp.Command):
+    arguments = [
+        ('nick', amp.Unicode()),
+    ]
+    response = [
+        ('ack', amp.Boolean()),
+    ]
+
+
 class ServerProtocol(amp.AMP):
 
     mport = None
@@ -83,20 +101,37 @@ class ServerClientsFactory(protocol.Factory):
         yield user.save()
 
         participants = self.clients.keys()
+
+        # Send info to participants
+        for c in self.clients.values():
+            c.callRemote(UserJoined, nick=user.nick_name)
+
         self.clients[user.nick_name] = client
-        # TODO: send info to participants
         # TODO: start media pipe
         defer.returnValue((user, participants))
 
     def unregister_client(self, client):
         del self.clients[client.user.nick_name]
         participants = self.clients.keys()
-        # TODO: send info to participants
+
+        # Send info to participants
+        for c in self.clients.values():
+            c.callRemote(UserLeft, nick=client.user.nick_name)
+
         # TODO: stop media pipe
 
 
 class ClientProtocol(amp.AMP):
-    pass
+
+    @UserJoined.responder
+    def joined(self, nick):
+        print nick, "has joined"
+        return {'ack': True}
+
+    @UserLeft.responder
+    def left(self, nick):
+        print nick, "has left"
+        return {'ack': True}
 
 
 class ClientFactory(protocol.ClientFactory):

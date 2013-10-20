@@ -13,7 +13,7 @@ from sequoia.security import ServerContextFactory
 
 
 def parse_args():
-    usage = """usage: %prog --host=HOST --cport=CPORT --mport=MPORT"""
+    usage = """usage: %prog [--host=HOST] [--cport=CPORT] [--mport=MPORT]"""
     parser = optparse.OptionParser(usage)
 
     help = "Host to run server on. Default: localhost"
@@ -35,8 +35,6 @@ def show_connector_info(connector, description):
 
 
 def main():
-    log.startLogging(sys.stdout)
-
     host, cport, mport = parse_args()
 
     Registry.DBPOOL = adbapi.ConnectionPool(
@@ -46,7 +44,7 @@ def main():
     ctx_factory = ServerContextFactory(
         "sequoia/tests/auth/server.key",
         "sequoia/tests/auth/server.crt",
-        "sequoia/tests/auth/root_ca.pem")
+        "sequoia/tests/auth/root_ca.crt")
 
     clients_listener = reactor.listenSSL(cport, clients_factory, ctx_factory,
         interface=host)
@@ -60,4 +58,5 @@ def main():
 
 
 if __name__ == "__main__":
+    log.startLogging(sys.stdout)
     main()
