@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import struct
 
 from ctypes import CDLL, c_ulong
 
@@ -18,9 +19,15 @@ class GOST(object):
         self.set_key(key)
 
     def set_key(self, key):
+        if isinstance(key, str):
+            key = self._str_to_key(key)
         assert isinstance(key, tuple)
         assert len(key) == 8
         self.key = self.__GostKey(*key)
+
+    def _str_to_key(self, value):
+        assert len(value) == 32
+        return struct.unpack('>'+'L'*8, value)
 
     def encrypt(self, data):
         dout = self.__GostData(0, 0)

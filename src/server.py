@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import optparse
+import speex
 import sys
 
 from twistar.registry import Registry
@@ -8,7 +9,8 @@ from twisted.enterprise import adbapi
 from twisted.internet import reactor
 from twisted.python import log
 
-from sequoia.protocol import ServerClientsFactory, MediaProtocol
+from sequoia.media.media import AudioMixer
+from sequoia.protocol import ServerClientsFactory, ServerMediaProtocol
 from sequoia.security import ServerContextFactory
 
 
@@ -40,7 +42,11 @@ def main():
     Registry.DBPOOL = adbapi.ConnectionPool(
         'sqlite3', "sequoia/tests/auth/sequoia.db", check_same_thread=False)
 
-    clients_factory = ServerClientsFactory()
+    mixer = AudioMixer()
+    reactor.callWhenRunning(mixer.start)
+    speexxx = speex.new()
+    media_tx = ServerMediaProtocol(speexxx, mixer)
+    clients_factory = ServerClientsFactory(media_tx)
     ctx_factory = ServerContextFactory(
         "sequoia/tests/auth/server.key",
         "sequoia/tests/auth/server.crt",
@@ -49,8 +55,7 @@ def main():
     clients_listener = reactor.listenSSL(cport, clients_factory, ctx_factory,
         interface=host)
     show_connector_info(clients_listener, "Listening clients")
-
-    media_listener = reactor.listenUDP(mport, clients_factory.media_tx,
+    media_listener = reactor.listenUDP(mport, media_tx,
         interface=host)
     show_connector_info(media_listener, "Serving media")
 

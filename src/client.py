@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import pyaudio
 import optparse
 import simplejson as json
+import speex
 import sys
 
 from OpenSSL.SSL import Error as SSLError
@@ -10,7 +12,8 @@ from twisted.internet.endpoints import SSL4ClientEndpoint
 from twisted.internet import defer, reactor
 from twisted.python import log
 
-from sequoia.protocol import ClientFactory, RegisterUser
+from sequoia.constants import AUDIO
+from sequoia.protocol import ClientFactory, ClientMediaProtocol, RegisterUser
 from sequoia.security import ClientCtxFactory
 
 
@@ -50,40 +53,53 @@ def parse_args():
 def main():
     host, port, key, crt, media_keys = parse_args()
 
-    def connect():
+    def endpoint_done(protocol):
+        d = media_tx.on_start
+        m_listener = reactor.listenUDP(0, media_tx, interface=host)
+        mport = m_listener.getHost().port
+        factory.host = protocol.transport.getHost().host
+        return d.addCallback(lambda _: protocol.register(mport=mport))
 
-        def done(protocol):
-            d = factory.media_tx.on_start
-            m_listener = reactor.listenUDP(0, factory.media_tx, interface=host)
-            return d.addCallback(lambda _: protocol.callRemote(
-                RegisterUser, mport=m_listener.getHost().port))
+    def endpoint_failed(err):
+        err.trap(SSLError)
+        return defer.fail(Exception("Invalid SSL credentials."))
 
-        def failed(err):
-            err.trap(SSLError)
-            return defer.fail(Exception("Invalid SSL credentials."))
+    def connection_done(result):
+        mport = result.pop('mport')
+        keys_pair_num = str(result.pop('keys_pair'))
+        keys = all_keys[keys_pair_num]
+        keys.reverse()
+        media_tx.configure(speexxx, keys, (factory.host, mport))
+        reactor.callLater(0, stream.start_stream)
 
-        factory = ClientFactory()
-        ctx_factory = ClientCtxFactory(key, crt)
-        endpoint = SSL4ClientEndpoint(reactor, host, port, ctx_factory)
-        d = endpoint.connect(factory)
-        d.addCallbacks(done, failed)
-        return d
+        print result.get('self_nick')
+        print result.get('participants')
 
-    def on_connection_success(result):
-        print result['mport']
-        print result['self_nick']
-        print result['participants']
-        print keys[str(result['keys_pair'])]
-
-    def on_connection_failed(reason):
+    def connection_failed(reason):
         print "FAIL: %s" % reason.value
         reactor.stop()
 
-    with open(media_keys, 'r') as f:
-        keys = json.loads(f.read())
+    def audio_callback(in_data, frame_count, time_info, status):
+        out_data = media_tx.push_n_pull(in_data)
+        return (out_data, pyaudio.paContinue)
 
-    d = connect()
-    d.addCallbacks(on_connection_success, on_connection_failed)
+    with open(media_keys, 'r') as f:
+        all_keys = json.loads(f.read())
+
+    audio = pyaudio.PyAudio()
+    stream = audio.open(
+        format=audio.get_format_from_width(AUDIO['width']),
+        channels=AUDIO['channels'], rate=AUDIO['rate'],
+        input=True, output=True, stream_callback=audio_callback)
+
+    speexxx = speex.new()
+    media_tx = ClientMediaProtocol()
+    factory = ClientFactory(media_tx)
+    ctx_factory = ClientCtxFactory(key, crt)
+    endpoint = SSL4ClientEndpoint(reactor, host, port, ctx_factory)
+    endpoint.connect(factory).addCallbacks(
+        endpoint_done, endpoint_failed).addCallbacks(
+        connection_done, connection_failed)
     reactor.run()
 
 

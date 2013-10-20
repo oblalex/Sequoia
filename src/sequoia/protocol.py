@@ -4,6 +4,7 @@ from twisted.internet import defer, protocol
 from twisted.protocols import amp
 from twisted.python import log
 
+from sequoia.media.media import MediaChannel
 from sequoia.models import User, MediaEncryptionKey
 
 
@@ -46,12 +47,12 @@ class UserLeft(amp.Command):
 
 class ServerProtocol(amp.AMP):
 
-    mport = None
+    media_address = None
     user = None
 
     @RegisterUser.responder
     def register(self, mport):
-        self.mport = mport
+        self.media_address = (self.transport.getHost().host, mport)
         return self.factory.register_client(self).addCallback(
             self._on_register)
 
@@ -64,7 +65,8 @@ class ServerProtocol(amp.AMP):
             'participants': participants,
         }
 
-    def get_serial_number(self):
+    @property
+    def serial_number(self):
         return str(self.transport.getPeerCertificate().get_serial_number())
 
     def connectionLost(self, reason):
@@ -75,8 +77,8 @@ class ServerClientsFactory(protocol.Factory):
 
     protocol = ServerProtocol
 
-    def __init__(self):
-        self.media_tx = MediaProtocol()
+    def __init__(self, media_tx):
+        self.media_tx = media_tx
         self.clients = {}
 
     def get_media_port(self):
@@ -84,10 +86,11 @@ class ServerClientsFactory(protocol.Factory):
 
     @defer.inlineCallbacks
     def register_client(self, client):
-        users = yield User.find(where=['login = ?', client.get_serial_number()])
-        if not users:
+        user = yield User.find(
+            where=['login = ?', client.serial_number],
+            limit=1)
+        if not user:
             raise RegistrationError("Unknown user")
-        user, = users
         if user.nick_name in self.clients:
             raise RegistrationError("Already connected")
         keys_pair_count = yield MediaEncryptionKey.count(where=[
@@ -98,8 +101,16 @@ class ServerClientsFactory(protocol.Factory):
         # Rotate keys pair
         user.sequence_number = user.sequence_number + 1 \
             if user.sequence_number < keys_pair_count else 1
+        keys = yield MediaEncryptionKey.find(
+            where=[
+                'user_id = ? AND sequence_number = ?',
+                user.id, user.sequence_number],
+            limit=1)
+        if not keys:
+            raise RegistrationError("Getting media encryption keys error")
         yield user.save()
 
+        media_keys = (str(keys.k1), str(keys.k2))
         participants = self.clients.keys()
 
         # Send info to participants
@@ -107,18 +118,21 @@ class ServerClientsFactory(protocol.Factory):
             c.callRemote(UserJoined, nick=user.nick_name)
 
         self.clients[user.nick_name] = client
-        # TODO: start media pipe
+        self.media_tx.register_channel(client.media_address, media_keys)
         defer.returnValue((user, participants))
 
     def unregister_client(self, client):
-        del self.clients[client.user.nick_name]
+        if client.user is None:
+            return
+
+        self.clients.pop(client.user.nick_name)
         participants = self.clients.keys()
 
         # Send info to participants
         for c in self.clients.values():
             c.callRemote(UserLeft, nick=client.user.nick_name)
 
-        # TODO: stop media pipe
+        self.media_tx.unregister_channel(client.media_address)
 
 
 class ClientProtocol(amp.AMP):
@@ -133,13 +147,17 @@ class ClientProtocol(amp.AMP):
         print nick, "has left"
         return {'ack': True}
 
+    def register(self, mport):
+        return self.callRemote(RegisterUser, mport=mport)
+
 
 class ClientFactory(protocol.ClientFactory):
 
     protocol = ClientProtocol
+    host = None
 
-    def __init__(self):
-        self.media_tx = MediaProtocol()
+    def __init__(self, media_tx):
+        self.media_tx = media_tx
 
     def clientConnectionFailed(self, connector, reason):
         print "Connection failed - goodbye!"
@@ -154,20 +172,70 @@ class ClientFactory(protocol.ClientFactory):
 
 class MediaProtocol(protocol.DatagramProtocol):
 
-    def __init__(self, address=None):
-        # add codec and ciphers
-        self.address = address
+    def __init__(self):
         self.on_start = defer.Deferred()
-        self.buffer_in = ""
-        self.buffer_out = ""
 
     def startProtocol(self):
         if self.on_start is not None:
             d, self.on_start = self.on_start, None
             d.callback(None)
 
+
+class ServerMediaProtocol(MediaProtocol):
+
+    def __init__(self, codec, mixer):
+        MediaProtocol.__init__(self)
+        self.codec = codec
+        self.mixer = mixer
+        self.channels = {}
+
+    def register_channel(self, address, keys):
+        assert address not in self.channels.keys()
+        channel = MediaChannel(self.codec, keys)
+        self.mixer.register_channel(channel)
+        self.channels[address] = channel
+
+    def unregister_channel(self, address):
+        assert address in self.channels.keys()
+        channel = self.channels.pop(address)
+        self.mixer.unregister_channel(channel)
+
+    def datagramReceived(self, data, address):
+        channel = self.channels.get(address)
+        if not channel:
+            log.msg("Got {0} bytes from unknown peer {1}:{2}".format(
+                len(data), *address))
+            return
+        length = channel.put_in(data)
+        out_data = channel.get_out(length)
+        if self.transport:
+            self.transport.write(out_data, address)
+
+
+class ClientMediaProtocol(MediaProtocol):
+
+    channel = None
+    address = None
+
+    def __init__(self):
+        MediaProtocol.__init__(self)
+
+    def configure(self, codec, keys, address):
+        self.channel = MediaChannel(codec, keys)
+        self.address = address
+
     def datagramReceived(self, data, address):
         if self.address is not None and address != self.address:
-            log.msg("Message from unknown peer: {0}:{1}.".format(*address))
+            log.msg("Incoming {0} bytes from unknown peer: {1}:{2}.".format(
+                len(data), *address))
             return
-        log.msg("Incoming {0} bytes from {1}:{2}.".format(len(data), *address))
+        self.channel.put_in(data)
+
+    def push_n_pull(self, in_data):
+        if self.channel:
+            to_send = self.channel.pack(in_data)
+            if self.transport:
+                self.transport.write(to_send, self.address)
+            return self.channel.get_in(len(in_data))
+        else:
+            return '\x00'*len(in_data)
