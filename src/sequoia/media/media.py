@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 
+import ctypes
 import itertools
+import os
 import struct
 import sys
 
 from twisted.internet.task import LoopingCall
 
 from sequoia.gost.gost import GOST
+
+
+libmedia_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libmedia.so")
+libmedia = ctypes.CDLL(libmedia_path)
 
 
 class MediaChannel(object):
@@ -59,7 +65,7 @@ class MediaChannel(object):
     def pack(self, data):
         # Encode with codec
         dlen = len(data)
-        din = list(struct.unpack('h'*(dlen/2), data))
+        din = list(struct.unpack("%dh" % (dlen/2), data))
         codec_out = self.codec.encode(din)
 
         # Cipher with GOST
@@ -68,7 +74,7 @@ class MediaChannel(object):
             for i in xrange(0, enc_len, 8)]
         enc_out = [self.cipher.encrypt(x) for x in enc_in]
         out = struct.pack(
-            '>'+'L'*(enc_len/4), *list(itertools.chain(*enc_out)))
+            '>%dL' % (enc_len/4), *list(itertools.chain(*enc_out)))
         return out
 
     def unpack(self, data):
@@ -77,11 +83,11 @@ class MediaChannel(object):
         din = [struct.unpack('>LL', data[i:i+8])
             for i in xrange(0, dlen, 8)]
         dec_out = [self.decipher.decrypt(x) for x in din]
-        dec = struct.pack('>'+'L'*(dlen/4), *list(itertools.chain(*dec_out)))
+        dec = struct.pack('>%dL' % (dlen/4), *list(itertools.chain(*dec_out)))
 
         # Decode with codec
         codec_out = self.codec.decode(dec)
-        return struct.pack('h'*len(codec_out), *codec_out) \
+        return struct.pack("%dh" % len(codec_out), *codec_out) \
             if codec_out else None
 
 
@@ -103,9 +109,22 @@ class AudioMixer(object):
         if not min_len:
             return
         for channel in self.channels:
-            # do echo
-            channel.put_out(channel.buffer_in)
-            channel.buffer_in = ''
+            prepared_data, channel.buffer_in = \
+                channel.buffer_in[:min_len], channel.buffer_in[min_len:]
+            channel.c_in = prepared_data if prepared_data else None
+
+        c_min_len = ctypes.c_int(min_len)
+        for channel_a in self.channels:
+            out_a = '\x00' * min_len
+            c_out_a = ctypes.c_char_p(out_a)
+            for channel_b in self.channels:
+                if channel_a == channel_b:
+                    continue
+                c_in_b = channel_b.c_in
+                if c_in_b is None:
+                    continue
+                libmedia.mix_channels(c_out_a, c_in_b, c_min_len)
+            channel_a.put_out(out_a)
 
     def _min_incoming_data_len(self):
         result = sys.maxint

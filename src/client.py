@@ -88,7 +88,7 @@ def main():
 
     audio = pyaudio.PyAudio()
     stream = audio.open(
-        format=audio.get_format_from_width(AUDIO['width']),
+        format=pyaudio.paInt16,
         channels=AUDIO['channels'], rate=AUDIO['rate'],
         input=True, output=True, stream_callback=audio_callback)
 
