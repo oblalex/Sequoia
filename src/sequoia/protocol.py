@@ -52,7 +52,7 @@ class ServerProtocol(amp.AMP):
 
     @RegisterUser.responder
     def register(self, mport):
-        self.media_address = (self.transport.getHost().host, mport)
+        self.media_address = (self.transport.getPeer().host, mport)
         return self.factory.register_client(self).addCallback(
             self._on_register)
 

@@ -55,9 +55,9 @@ def main():
 
     def endpoint_done(protocol):
         d = media_tx.on_start
-        m_listener = reactor.listenUDP(0, media_tx, interface=host)
+        m_listener = reactor.listenUDP(0, media_tx)
         mport = m_listener.getHost().port
-        factory.host = protocol.transport.getHost().host
+        factory.host = protocol.transport.getPeer().host
         return d.addCallback(lambda _: protocol.register(mport=mport))
 
     def endpoint_failed(err):

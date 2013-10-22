@@ -93,7 +93,7 @@ class MediaChannel(object):
 
 class AudioMixer(object):
 
-    def __init__(self, period=0.05):
+    def __init__(self, period=0.125):
         self.period = period
         self.channels = []
         self.lcall = LoopingCall(self._mix_channels)
@@ -109,20 +109,22 @@ class AudioMixer(object):
         if not min_len:
             return
         for channel in self.channels:
-            prepared_data, channel.buffer_in = \
+            channel.prepared_data, channel.buffer_in = \
                 channel.buffer_in[:min_len], channel.buffer_in[min_len:]
-            channel.c_in = prepared_data if prepared_data else None
-
+            channel.c_in = ctypes.c_char_p(channel.prepared_data) \
+                if channel.prepared_data else None
         c_min_len = ctypes.c_int(min_len)
         for channel_a in self.channels:
             out_a = '\x00' * min_len
             c_out_a = ctypes.c_char_p(out_a)
             for channel_b in self.channels:
+                print "?" * 10
                 if channel_a == channel_b:
                     continue
                 c_in_b = channel_b.c_in
                 if c_in_b is None:
                     continue
+                print "-" * 10
                 libmedia.mix_channels(c_out_a, c_in_b, c_min_len)
             channel_a.put_out(out_a)
 
