@@ -1,6 +1,6 @@
 #!/bin/bash
 
-apt-get install python2.7-dev python-pip python-gtk2 libspeex-dev libportaudio2 libssl libssl-dev
+apt-get install python2.7-dev python-pip python-gtk2 libspeex-dev libportaudio2 libssl1.0.0 libssl-dev
 
 pip install -r requirements.pip
 

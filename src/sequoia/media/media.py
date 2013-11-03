@@ -39,7 +39,6 @@ class MediaChannel(object):
 
     def get_in(self, length):
         """Get unpacked data from server or silence."""
-        # return unpacked from buffer_in or silence
         idx = min(len(self.buffer_in), length)
         if idx:
             out, self.buffer_in = self.buffer_in[:idx], self.buffer_in[idx:]
@@ -64,9 +63,9 @@ class MediaChannel(object):
 
     def pack(self, data):
         # Encode with codec
-        dlen = len(data)
-        din = list(struct.unpack("%dh" % (dlen/2), data))
-        codec_out = self.codec.encode(din)
+        # dlen = len(data)
+        # din = list(struct.unpack("%dh" % (dlen/2), data))
+        codec_out = data#self.codec.encode(din)
 
         # Cipher with GOST
         enc_len = len(codec_out)
@@ -85,10 +84,11 @@ class MediaChannel(object):
         dec_out = [self.decipher.decrypt(x) for x in din]
         dec = struct.pack('>%dL' % (dlen/4), *list(itertools.chain(*dec_out)))
 
-        # Decode with codec
-        codec_out = self.codec.decode(dec)
-        return struct.pack("%dh" % len(codec_out), *codec_out) \
-            if codec_out else None
+        return dec
+        # # Decode with codec
+        # codec_out = self.codec.decode(dec)
+        # return struct.pack("%dh" % len(codec_out), *codec_out) \
+        #     if codec_out else None
 
 
 class AudioMixer(object):
@@ -118,14 +118,11 @@ class AudioMixer(object):
             out_a = '\x00' * min_len
             c_out_a = ctypes.c_char_p(out_a)
             for channel_b in self.channels:
-                print "?" * 10
                 if channel_a == channel_b:
                     continue
-                c_in_b = channel_b.c_in
-                if c_in_b is None:
+                if channel_b.c_in is None:
                     continue
-                print "-" * 10
-                libmedia.mix_channels(c_out_a, c_in_b, c_min_len)
+                libmedia.mix_channels(c_out_a, channel_b.c_in, c_min_len)
             channel_a.put_out(out_a)
 
     def _min_incoming_data_len(self):
