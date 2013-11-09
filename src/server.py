@@ -44,7 +44,7 @@ def main():
 
     mixer = AudioMixer()
     reactor.callWhenRunning(mixer.start)
-    speexxx = speex.new()
+    speexxx = None#speex.new()
     media_tx = ServerMediaProtocol(speexxx, mixer)
     clients_factory = ServerClientsFactory(media_tx)
     ctx_factory = ServerContextFactory(

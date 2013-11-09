@@ -2,18 +2,38 @@
 <interface>
   <requires lib="gtk+" version="2.24"/>
   <!-- interface-naming-policy project-wide -->
-  <object class="GtkListStore" id="liststore1"/>
-  <object class="GtkWindow" id="window1">
+  <object class="GtkImage" id="cipher_img">
+    <property name="visible">True</property>
     <property name="can_focus">False</property>
+    <property name="pixbuf">lock.png</property>
+  </object>
+  <object class="GtkImage" id="conferences_img">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="icon_name">network-server</property>
+  </object>
+  <object class="GtkImage" id="keys_img">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-dialog-authentication</property>
+  </object>
+  <object class="GtkWindow" id="main_wnd">
+    <property name="can_focus">False</property>
+    <property name="title" translatable="yes">Sequoia</property>
+    <property name="window_position">center</property>
+    <property name="default_height">400</property>
+    <property name="icon">tree.png</property>
+    <signal name="delete-event" handler="on_main_wnd_delete_event" swapped="no"/>
     <child>
       <object class="GtkVBox" id="vbox1">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <child>
-          <object class="GtkTreeView" id="treeview1">
+          <object class="GtkTreeView" id="participants_tree">
             <property name="visible">True</property>
             <property name="can_focus">True</property>
-            <property name="model">liststore1</property>
+            <property name="headers_clickable">False</property>
+            <property name="rules_hint">True</property>
           </object>
           <packing>
             <property name="expand">True</property>
@@ -22,74 +42,100 @@
           </packing>
         </child>
         <child>
-          <object class="GtkHBox" id="hbox1">
+          <object class="GtkTable" id="table1">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
-            <property name="homogeneous">True</property>
+            <property name="n_rows">2</property>
+            <property name="n_columns">2</property>
             <child>
-              <object class="GtkButton" id="button1">
+              <object class="GtkButton" id="keys_bnt">
                 <property name="label" translatable="yes">Keys</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
                 <property name="use_action_appearance">False</property>
+                <property name="image">keys_img</property>
+                <signal name="clicked" handler="on_keys_bnt_clicked" swapped="no"/>
               </object>
               <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-                <property name="position">0</property>
+                <property name="top_attach">1</property>
+                <property name="bottom_attach">2</property>
               </packing>
             </child>
             <child>
-              <object class="GtkButton" id="button2">
-                <property name="label" translatable="yes">Stop cipher</property>
-                <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="receives_default">True</property>
-                <property name="use_action_appearance">False</property>
-              </object>
-              <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkButton" id="button3">
-                <property name="label" translatable="yes">Mute</property>
-                <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="receives_default">True</property>
-                <property name="use_action_appearance">False</property>
-              </object>
-              <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-                <property name="position">2</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkButton" id="button4">
+              <object class="GtkButton" id="conferences_btn">
                 <property name="label" translatable="yes">Conferences</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
                 <property name="use_action_appearance">False</property>
+                <property name="image">conferences_img</property>
+                <signal name="clicked" handler="on_conferences_btn_clicked" swapped="no"/>
               </object>
               <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-                <property name="position">3</property>
+                <property name="left_attach">1</property>
+                <property name="right_attach">2</property>
+                <property name="top_attach">1</property>
+                <property name="bottom_attach">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="cipher_btn">
+                <property name="label" translatable="yes">Cipher</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="use_action_appearance">False</property>
+                <property name="image">cipher_img</property>
+                <property name="active">True</property>
+                <signal name="toggled" handler="on_cipher_btn_toggled" swapped="no"/>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="recording_btn">
+                <property name="label" translatable="yes">Recording</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="use_action_appearance">False</property>
+                <property name="image">recording_img</property>
+                <property name="active">True</property>
+                <signal name="toggled" handler="on_recording_btn_toggled" swapped="no"/>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="right_attach">2</property>
               </packing>
             </child>
           </object>
           <packing>
             <property name="expand">False</property>
-            <property name="fill">True</property>
+            <property name="fill">False</property>
             <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="connetcion_btn">
+            <property name="label">gtk-connect</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">True</property>
+            <property name="use_action_appearance">False</property>
+            <property name="use_stock">True</property>
+            <signal name="toggled" handler="on_connetcion_btn_toggled" swapped="no"/>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
           </packing>
         </child>
       </object>
     </child>
+  </object>
+  <object class="GtkImage" id="recording_img">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="pixbuf">microphone.png</property>
   </object>
 </interface>
