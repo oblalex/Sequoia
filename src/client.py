@@ -17,8 +17,9 @@ import speex
 import sys
 
 from OpenSSL.SSL import Error as SSLError
-from twisted.internet.endpoints import SSL4ClientEndpoint
 from twisted.internet import defer, reactor
+from twisted.internet.endpoints import SSL4ClientEndpoint
+from twisted.internet.error import ConnectionRefusedError
 from twisted.python import log
 
 from sequoia.constants import AUDIO
@@ -29,6 +30,15 @@ from sequoia.security import ClientCtxFactory
 def get_ui_dir():
     return os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "sequoia/ui")
+
+
+def show_error(message, wnd=None):
+    md = gtk.MessageDialog(
+        wnd, gtk.DIALOG_DESTROY_WITH_PARENT,
+        gtk.MESSAGE_ERROR, gtk.BUTTONS_CLOSE,
+        message)
+    md.run()
+    md.destroy()
 
 
 class KeysSelectingWindow(object):
@@ -121,7 +131,7 @@ class ConferencesWindow(object):
         column = self._create_column("Name", 0)
         tree.append_column(column)
 
-        column = self._create_column("Address", 1)
+        column = self._create_column("Host", 1)
         tree.append_column(column)
 
         column = self._create_column("Port", 2, type_func=int, resizable=False)
@@ -131,14 +141,14 @@ class ConferencesWindow(object):
 
         def edited_callback(cell, path, new_value):
             if not new_value:
-                self._show_error("Value cannot be empty.")
+                show_error("Value cannot be empty.", self.wnd)
                 return
             try:
                 value = type_func(new_value)
             except ValueError:
                 msg = "'{0}' is wrong {1} value.".format(
                     new_value, type_func.__name__)
-                self._show_error(msg)
+                show_error(msg, self.wnd)
             else:
                 self._get_row(path)[id] = value
 
@@ -157,14 +167,6 @@ class ConferencesWindow(object):
     def _get_row(self, path):
         return self.store[self._get_row_cursor(path)]
 
-    def _show_error(self, message):
-        md = gtk.MessageDialog(
-            self.wnd, gtk.DIALOG_DESTROY_WITH_PARENT,
-            gtk.MESSAGE_ERROR, gtk.BUTTONS_CLOSE,
-            message)
-        md.run()
-        md.destroy()
-
     @property
     def store(self):
         return self.tree.get_model().get_model()
@@ -181,7 +183,7 @@ class ConferencesWindow(object):
         model = self.tree.get_model()
         if len(model) > 0:
             cursor = self.current_cursor
-            selected_name, address, port = model[cursor]
+            selected_name, host, port = model[cursor]
 
             chunks = selected_name.rsplit('.', 1)
             try:
@@ -200,7 +202,7 @@ class ConferencesWindow(object):
                 suffix += 1
                 cursor += 1
 
-            data = (name, address, port)
+            data = (name, host, port)
             cursor += 1
         else:
             data = ("Default", "192.168.1.2", 9876)
@@ -231,18 +233,36 @@ class ConferencesWindow(object):
 
 class MainWindow(object):
 
-    def __init__(self):
+    media_keys = None
+    media_tx = None
+    client = None
+    codec = None
+    stream = None
+    do_exit = False
+
+    def __init__(self, audio):
+        self.audio = audio
         self.settings = self._init_settings()
+
         gladefile = os.path.join(get_ui_dir(), "main.glade")
         root = gtk.Builder()
         root.add_from_file(gladefile)
 
         self.store = self._init_participants_tree(root)
+
         self.buttons = {
             'connection': root.get_object('connetcion_btn'),
             'cipher': root.get_object('cipher_btn'),
             'recording': root.get_object('recording_btn'),
         }
+
+        value = self.settings.setdefault('record_input', True)
+        self.buttons['recording'].set_active(value)
+        self.update_recording_btn(value)
+
+        value = self.settings.setdefault('do_cipher', True)
+        self.buttons['cipher'].set_active(value)
+        self.update_cipher_btn(value)
 
         signals = {
             'on_keys_bnt_clicked': self.on_keys_bnt_clicked,
@@ -292,81 +312,205 @@ class MainWindow(object):
         KeysSelectingWindow(key_paths).show()
 
     def on_cipher_btn_toggled(self, widget):
-        filename = 'lock.png' if widget.get_active() else \
+        self.settings['do_cipher'] = widget.get_active()
+        self.update_cipher_btn(widget.get_active())
+
+    def update_cipher_btn(self, value):
+        filename = 'lock.png' if value else \
                    'lock-open.png'
         img = self.buttons['cipher'].get_image()
         img.set_from_file(os.path.join(get_ui_dir(), filename))
 
+        if self.media_tx and self.media_tx.channel:
+            self.media_tx.channel.do_cipher = value
+
     def on_recording_btn_toggled(self, widget):
-        filename = 'microphone.png' if widget.get_active() else \
-                   'microphone-muted.png'
+        self.settings['record_input'] = widget.get_active()
+        self.update_recording_btn(widget.get_active())
+
+    def update_recording_btn(self, value):
+        filename = 'microphone.png' if value else 'microphone-muted.png'
         img = self.buttons['recording'].get_image()
         img.set_from_file(os.path.join(get_ui_dir(), filename))
 
     def on_connetcion_btn_toggled(self, widget):
-        # if failed: widget.set_active(False)
-        label = gtk.STOCK_DISCONNECT if widget.get_active() else \
-                gtk.STOCK_CONNECT
-        self.buttons['connection'].set_label(label)
+        if widget.get_active():
+            if (not self._validate_files()
+                or not self._validate_conference()
+                or not self._load_media_keys()):
+                widget.set_active(False)
+                return
+            self.buttons['connection'].set_label("Connecting...")
+
+            self.media_tx = ClientMediaProtocol()
+            factory = ClientFactory(self.media_tx)
+            factory.on_connection_lost.addBoth(self.connection_lost)
+
+            keys = self.settings['keys']
+            ctx_factory = ClientCtxFactory(
+                keys['private_key'], keys['certificate'])
+
+            c_id = self.settings['conferences_info']['current']
+            c_info = self.settings['conferences_info']['conferences'][c_id]
+            name, host, port = c_info
+
+            endpoint = SSL4ClientEndpoint(reactor, host, port, ctx_factory)
+            endpoint.connect(factory).addCallbacks(
+                self.endpoint_done, self.endpoint_failed).addCallbacks(
+                self.connection_done, self.connection_failed)
+        elif self.client:
+            self.client.transport.loseConnection()
+
+    def _validate_files(self):
+        keys = self.settings.get('keys')
+        if not keys:
+            show_error("Please, check your keys settings", self.wnd)
+            return False
+        for k in ['private_key', 'certificate', 'media_keys', ]:
+            name = k.replace('_', ' ')
+            filename = keys.get(k)
+            if not filename:
+                show_error("Please, select {0} file".format(name), self.wnd)
+                return False
+            if not os.path.isfile(filename):
+                show_error("Invalid {0} file".format(name), self.wnd)
+                return False
+        return True
+
+    def _validate_conference(self):
+
+        def on_unconfigured():
+            show_error("Please, configure conferences")
+            return False
+
+        c_info = self.settings.get('conferences_info')
+        if not c_info:
+            return on_unconfigured()
+        confs = c_info.get('conferences')
+        if not confs:
+            return on_unconfigured()
+        current = c_info.get('current')
+        if current is None or current < 0 or current > len(confs):
+            show_error("Please, select conference")
+            return False
+
+        return True
+
+    def _load_media_keys(self):
+        try:
+            with open(self.settings['keys']['media_keys'], 'r') as f:
+                self.media_keys = json.loads(f.read())
+        except IOError:
+            show_error("Could not read media keys file", self.wnd)
+            return False
+        except json.JSONDecodeError:
+            show_error("Media keys file has invalid format", self.wnd)
+            return False
+        return True
+
+    def endpoint_done(self, protocol):
+        self.client = protocol
+        protocol.user_joined_cb = self.on_user_joined
+        protocol.user_left_cb = self.on_user_left
+
+        d = self.media_tx.on_start
+        m_listener = reactor.listenUDP(0, self.media_tx)
+        mport = m_listener.getHost().port
+        return d.addCallback(lambda _: protocol.register(mport=mport))
+
+    def endpoint_failed(self, failure):
+        failure.trap(SSLError)
+        show_error("Invalid SSL credentials", self.wnd)
+        self.connection_closed()
+        return failure
+
+    def connection_done(self, result):
+        if result.get('use_codec') and self.codec is None:
+            self.codec = speex.new()
+
+        keys_pair_num = str(result.pop('keys_pair'))
+        keys = self.media_keys[keys_pair_num]
+        keys.reverse()
+
+        mport = result.pop('mport')
+        remote_media_addr = (self.client.transport.getPeer().host, mport)
+
+        self.stream = self.audio.open(
+            format=pyaudio.paInt16,
+            channels=AUDIO['channels'], rate=AUDIO['rate'],
+            input=True, output=True, stream_callback=self.on_audio_ready)
+        self.media_tx.configure(self.codec, keys, remote_media_addr)
+        self.media_tx.channel.do_cipher = self.settings['do_cipher']
+
+        reactor.callLater(0, self.stream.start_stream)
+
+        self.store.append((result['self_nick'] + " (you)", ))
+        for nick_name in result['participants']:
+            self.store.append((nick_name, ))
+
+        self.buttons['connection'].set_label(gtk.STOCK_DISCONNECT)
+
+    def connection_failed(self, failure):
+        e = failure.trap(ConnectionRefusedError)
+        show_error("Connection refused", self.wnd)
+        self.connection_lost()
+
+    def connection_lost(self, reason=None):
+        self.media_keys = None
+        self.media_tx = None
+        if self.client is not None:
+            self.client.user_joined_cb = None
+            self.client.user_left_cb = None
+            self.client = None
+        if self.stream is not None:
+            self.stream.close()
+            self.stream = None
+
+        self.store.clear()
+
+        widget = self.buttons['connection']
+        widget.set_label(gtk.STOCK_CONNECT)
+        widget.set_active(False)
+
+        if self.do_exit:
+            self.exit()
 
     def delete_event(self, widget, event):
+        if self.client is None:
+            self.exit()
+        else:
+            self.do_exit = True
+            self.client.transport.loseConnection()
+        return False
+
+    def exit(self):
         self.settings.close()
         gtk.main_quit()
         reactor.stop()
-        return False
+
+    def on_user_joined(self, nick_name):
+        self.store.append((nick_name, ))
+
+    def on_user_left(self, nick_name):
+        for row in self.store:
+            if row[0] == nick_name:
+                self.store.remove(row.iter)
+                break
+
+    def on_audio_ready(self, in_data, frame_count, time_info, status):
+        if self.is_audio_input_enabled:
+            self.media_tx.push(in_data)
+        out_data = self.media_tx.pull(len(in_data))
+        return (out_data, pyaudio.paContinue)
+
+    @property
+    def is_audio_input_enabled(self):
+        return self.settings.get('record_input', True)
 
 
 def main():
-    # host, port, key, crt, media_keys = parse_args()
-
-    # def endpoint_done(protocol):
-    #     d = media_tx.on_start
-    #     m_listener = reactor.listenUDP(0, media_tx)
-    #     mport = m_listener.getHost().port
-    #     factory.host = protocol.transport.getPeer().host
-    #     return d.addCallback(lambda _: protocol.register(mport=mport))
-
-    # def endpoint_failed(err):
-    #     err.trap(SSLError)
-    #     return defer.fail(Exception("Invalid SSL credentials."))
-
-    # def connection_done(result):
-    #     mport = result.pop('mport')
-    #     keys_pair_num = str(result.pop('keys_pair'))
-    #     keys = all_keys[keys_pair_num]
-    #     keys.reverse()
-    #     media_tx.configure(speexxx, keys, (factory.host, mport))
-    #     reactor.callLater(0, stream.start_stream)
-
-    #     print result.get('self_nick')
-    #     print result.get('participants')
-
-    # def connection_failed(reason):
-    #     print "FAIL: %s" % reason.value
-    #     reactor.stop()
-
-    # def audio_callback(in_data, frame_count, time_info, status):
-    #     out_data = media_tx.push_n_pull(in_data)
-    #     return (out_data, pyaudio.paContinue)
-
-    # with open(media_keys, 'r') as f:
-    #     all_keys = json.loads(f.read())
-
-    # audio = pyaudio.PyAudio()
-    # stream = audio.open(
-    #     format=pyaudio.paInt16,
-    #     channels=AUDIO['channels'], rate=AUDIO['rate'],
-    #     input=True, output=True, stream_callback=audio_callback)
-
-    # speexxx = None#speex.new()
-    # media_tx = ClientMediaProtocol()
-    # factory = ClientFactory(media_tx)
-    # ctx_factory = ClientCtxFactory(key, crt)
-    # endpoint = SSL4ClientEndpoint(reactor, host, port, ctx_factory)
-    # endpoint.connect(factory).addCallbacks(
-    #     endpoint_done, endpoint_failed).addCallbacks(
-    #     connection_done, connection_failed)
-    wnd = MainWindow()
+    audio = pyaudio.PyAudio()
+    wnd = MainWindow(audio)
     reactor.run()
 
 

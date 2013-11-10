@@ -17,6 +17,8 @@ libmedia = ctypes.CDLL(libmedia_path)
 
 class MediaChannel(object):
 
+    do_cipher = True
+
     def __init__(self, codec, (key_in, key_out)):
         self.codec = codec
         self.cipher = GOST(key_out)
@@ -63,32 +65,44 @@ class MediaChannel(object):
 
     def pack(self, data):
         # Encode with codec
-        # dlen = len(data)
-        # din = list(struct.unpack("%dh" % (dlen/2), data))
-        codec_out = data#self.codec.encode(din)
+        if self.codec is not None:
+            dlen = len(data)
+            din = list(struct.unpack("%dh" % (dlen/2), data))
+            codec_out = self.codec.encode(din)
+        else:
+            codec_out = data
 
         # Cipher with GOST
-        enc_len = len(codec_out)
-        enc_in = [struct.unpack('>LL', codec_out[i:i+8])
-            for i in xrange(0, enc_len, 8)]
-        enc_out = [self.cipher.encrypt(x) for x in enc_in]
-        out = struct.pack(
-            '>%dL' % (enc_len/4), *list(itertools.chain(*enc_out)))
-        return out
+        if self.do_cipher:
+            enc_len = len(codec_out)
+            enc_in = [struct.unpack('>LL', codec_out[i:i+8])
+                for i in xrange(0, enc_len, 8)]
+            enc_out = [self.cipher.encrypt(x) for x in enc_in]
+            out = struct.pack(
+                '>%dL' % (enc_len/4), *list(itertools.chain(*enc_out)))
+            return out
+        else:
+            return codec_out
 
     def unpack(self, data):
         # Decipher with GOST
-        dlen = len(data)
-        din = [struct.unpack('>LL', data[i:i+8])
-            for i in xrange(0, dlen, 8)]
-        dec_out = [self.decipher.decrypt(x) for x in din]
-        dec = struct.pack('>%dL' % (dlen/4), *list(itertools.chain(*dec_out)))
+        if self.do_cipher:
+            dlen = len(data)
+            din = [struct.unpack('>LL', data[i:i+8])
+                for i in xrange(0, dlen, 8)]
+            dec_out = [self.decipher.decrypt(x) for x in din]
+            dec = struct.pack(
+                '>%dL' % (dlen/4), *list(itertools.chain(*dec_out)))
+        else:
+            dec = data
 
-        return dec
-        # # Decode with codec
-        # codec_out = self.codec.decode(dec)
-        # return struct.pack("%dh" % len(codec_out), *codec_out) \
-        #     if codec_out else None
+        # Decode with codec
+        if self.codec is not None:
+            codec_out = self.codec.decode(dec)
+            return struct.pack("%dh" % len(codec_out), *codec_out) \
+                if codec_out else None
+        else:
+            return dec
 
 
 class AudioMixer(object):

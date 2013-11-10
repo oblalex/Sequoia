@@ -4,8 +4,6 @@ from OpenSSL import SSL
 from twisted.internet import ssl
 from twisted.python import log
 
-from pprint import pprint
-
 
 class ServerContextFactory(ssl.DefaultOpenSSLContextFactory):
 

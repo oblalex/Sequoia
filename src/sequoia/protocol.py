@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from twisted.internet import defer, protocol
+from twisted.internet.error import ConnectionDone
 from twisted.protocols import amp
 from twisted.python import log
 
@@ -18,6 +19,7 @@ class RegisterUser(amp.Command):
     ]
     response = [
         ('mport', amp.Integer()),
+        ('use_codec', amp.Boolean()),
         ('keys_pair', amp.Integer()),
         ('self_nick', amp.Unicode()),
         ('participants', amp.ListOf(amp.Unicode())),
@@ -29,7 +31,7 @@ class RegisterUser(amp.Command):
 
 class UserJoined(amp.Command):
     arguments = [
-        ('nick', amp.Unicode()),
+        ('nick_name', amp.Unicode()),
     ]
     response = [
         ('ack', amp.Boolean()),
@@ -38,7 +40,7 @@ class UserJoined(amp.Command):
 
 class UserLeft(amp.Command):
     arguments = [
-        ('nick', amp.Unicode()),
+        ('nick_name', amp.Unicode()),
     ]
     response = [
         ('ack', amp.Boolean()),
@@ -60,6 +62,7 @@ class ServerProtocol(amp.AMP):
         self.user = user
         return {
             'mport': self.factory.get_media_port(),
+            'use_codec': self.factory.use_codec,
             'self_nick': self.user.nick_name,
             'keys_pair': self.user.sequence_number,
             'participants': participants,
@@ -77,8 +80,9 @@ class ServerClientsFactory(protocol.Factory):
 
     protocol = ServerProtocol
 
-    def __init__(self, media_tx):
+    def __init__(self, media_tx, use_codec=False):
         self.media_tx = media_tx
+        self.use_codec = use_codec
         self.clients = {}
 
     def get_media_port(self):
@@ -87,14 +91,13 @@ class ServerClientsFactory(protocol.Factory):
     @defer.inlineCallbacks
     def register_client(self, client):
         user = yield User.find(
-            where=['login = ?', client.serial_number],
-            limit=1)
+            where=['login = ?', client.serial_number], limit=1)
         if not user:
             raise RegistrationError("Unknown user")
         if user.nick_name in self.clients:
             raise RegistrationError("Already connected")
-        keys_pair_count = yield MediaEncryptionKey.count(where=[
-            'user_id = ?', user.id])
+        keys_pair_count = yield MediaEncryptionKey.count(
+            where=['user_id = ?', user.id])
         if not keys_pair_count:
             raise RegistrationError("No media encryption keys")
 
@@ -115,7 +118,7 @@ class ServerClientsFactory(protocol.Factory):
 
         # Send info to participants
         for c in self.clients.values():
-            c.callRemote(UserJoined, nick=user.nick_name)
+            c.callRemote(UserJoined, nick_name=user.nick_name)
 
         self.clients[user.nick_name] = client
         self.media_tx.register_channel(client.media_address, media_keys)
@@ -130,25 +133,33 @@ class ServerClientsFactory(protocol.Factory):
 
         # Send info to participants
         for c in self.clients.values():
-            c.callRemote(UserLeft, nick=client.user.nick_name)
+            c.callRemote(UserLeft, nick_name=client.user.nick_name)
 
         self.media_tx.unregister_channel(client.media_address)
 
 
 class ClientProtocol(amp.AMP):
 
+    user_joined_cb = None
+    user_left_cb = None
+
     @UserJoined.responder
-    def joined(self, nick):
-        print nick, "has joined"
+    def joined(self, nick_name):
+        if self.user_joined_cb is not None:
+            self.user_joined_cb(nick_name)
         return {'ack': True}
 
     @UserLeft.responder
-    def left(self, nick):
-        print nick, "has left"
+    def left(self, nick_name):
+        if self.user_left_cb is not None:
+            self.user_left_cb(nick_name)
         return {'ack': True}
 
     def register(self, mport):
         return self.callRemote(RegisterUser, mport=mport)
+
+    def connectionLost(self, reason):
+        self.factory.clientConnectionLost(self, reason)
 
 
 class ClientFactory(protocol.ClientFactory):
@@ -158,16 +169,15 @@ class ClientFactory(protocol.ClientFactory):
 
     def __init__(self, media_tx):
         self.media_tx = media_tx
-
-    def clientConnectionFailed(self, connector, reason):
-        print "Connection failed - goodbye!"
-        from twisted.internet import reactor
-        reactor.stop()
+        self.on_connection_lost = defer.Deferred()
 
     def clientConnectionLost(self, connector, reason):
-        print "Connection lost - goodbye!"
-        from twisted.internet import reactor
-        reactor.stop()
+        if self.on_connection_lost is not None:
+            d, self.on_connection_lost = self.on_connection_lost, None
+            if isinstance(reason.value, ConnectionDone):
+                d.callback(None)
+            else:
+                d.errback(reason)
 
 
 class MediaProtocol(protocol.DatagramProtocol):
@@ -231,11 +241,13 @@ class ClientMediaProtocol(MediaProtocol):
             return
         self.channel.put_in(data)
 
-    def push_n_pull(self, in_data):
-        if self.channel:
+    def push(self, in_data):
+        if self.channel and self.transport:
             to_send = self.channel.pack(in_data)
-            if self.transport:
-                self.transport.write(to_send, self.address)
-            return self.channel.get_in(len(in_data))
+            self.transport.write(to_send, self.address)
+
+    def pull(self, length):
+        if self.channel:
+            return self.channel.get_in(length)
         else:
-            return '\x00'*len(in_data)
+            return '\x00'*length

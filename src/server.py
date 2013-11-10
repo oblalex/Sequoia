@@ -38,6 +38,7 @@ def show_connector_info(connector, description):
 
 def main():
     host, cport, mport = parse_args()
+    use_codec = False
 
     Registry.DBPOOL = adbapi.ConnectionPool(
         'sqlite3', "sequoia/tests/auth/server_1/database.db",
@@ -45,9 +46,9 @@ def main():
 
     mixer = AudioMixer()
     reactor.callWhenRunning(mixer.start)
-    speexxx = None#speex.new()
-    media_tx = ServerMediaProtocol(speexxx, mixer)
-    clients_factory = ServerClientsFactory(media_tx)
+    codec = speex.new() if use_codec else None
+    media_tx = ServerMediaProtocol(codec, mixer)
+    clients_factory = ServerClientsFactory(media_tx, use_codec)
     ctx_factory = ServerContextFactory(
         "sequoia/tests/auth/server_1/private_key.pem",
         "sequoia/tests/auth/server_1/certificate.pem",

@@ -145,5 +145,4 @@
     <property name="can_focus">False</property>
     <property name="pixbuf">microphone.png</property>
   </object>
-  <object class="GtkStatusIcon" id="statusicon"/>
 </interface>
