@@ -13,6 +13,7 @@ import optparse
 import os
 import simplejson as json
 import shelve
+import speex
 import sys
 
 from OpenSSL.SSL import Error as SSLError
@@ -25,15 +26,68 @@ from sequoia.protocol import ClientFactory, ClientMediaProtocol, RegisterUser
 from sequoia.security import ClientCtxFactory
 
 
-class MainWindow(object):
+def get_ui_dir():
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "sequoia/ui")
 
-    ui_dir = None
+
+class KeysSelectingWindow(object):
+
+    def __init__(self, paths):
+        self.paths = paths
+
+        gladefile = os.path.join(get_ui_dir(), "keys.glade")
+        root = gtk.Builder()
+        root.add_from_file(gladefile)
+
+        self.selectors = {
+            'pkey': root.get_object('pkey_selector'),
+            'crt': root.get_object('crt_selector'),
+            'mkeys': root.get_object('mkeys_selector'),
+        }
+        self._load_paths(self.paths, self.selectors)
+        self.wnd = root.get_object('keys_wnd')
+
+        signals = {
+            'on_apply_btn_clicked': self.on_apply_btn_clicked,
+            'on_close_btn_clicked': self.on_close_btn_clicked,
+        }
+        root.connect_signals(signals)
+
+    def _load_paths(self, paths, selectors):
+        p = paths.get('private_key')
+        if p:
+            selectors['pkey'].set_filename(p)
+        p = paths.get('certificate')
+        if p:
+            selectors['crt'].set_filename(p)
+        p = paths.get('media_keys')
+        if p:
+            selectors['mkeys'].set_filename(p)
+
+    def _save_paths(self, paths, selectors):
+        paths.update({
+            'private_key': selectors['pkey'].get_filename(),
+            'certificate': selectors['crt'].get_filename(),
+            'media_keys': selectors['mkeys'].get_filename(),
+        })
+
+    def on_apply_btn_clicked(self, widget):
+        self._save_paths(self.paths, self.selectors)
+        self.wnd.destroy()
+
+    def on_close_btn_clicked(self, widget):
+        self.wnd.destroy()
+
+    def show(self):
+        self.wnd.show()
+
+
+class MainWindow(object):
 
     def __init__(self):
         self.settings = self._init_settings()
-        self.ui_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "sequoia/ui")
-        gladefile = os.path.join(self.ui_dir, "main.glade")
+        gladefile = os.path.join(get_ui_dir(), "main.glade")
         root = gtk.Builder()
         root.add_from_file(gladefile)
 
@@ -86,28 +140,30 @@ class MainWindow(object):
 
         return store
 
+    # for row in self.participants_store:
+    #     if row[0] == 'baz':
+    #         self.participants_store.remove(row.iter)
+    #         break
+    # self.participants_store.append(['baz', ])
+
     def on_conferences_btn_clicked(self, widget):
         pass
-        # for row in self.participants_store:
-        #     if row[0] == 'baz':
-        #         self.participants_store.remove(row.iter)
-        #         break
 
     def on_keys_bnt_clicked(self, widget):
-        pass
-        # self.participants_store.append(['baz', ])
+        key_paths = self.settings.setdefault('keys', {})
+        KeysSelectingWindow(key_paths).show()
 
     def on_cipher_btn_toggled(self, widget):
         filename = 'lock.png' if widget.get_active() else \
                    'lock-open.png'
         img = self.buttons['cipher'].get_image()
-        img.set_from_file(os.path.join(self.ui_dir, filename))
+        img.set_from_file(os.path.join(get_ui_dir(), filename))
 
     def on_recording_btn_toggled(self, widget):
         filename = 'microphone.png' if widget.get_active() else \
                    'microphone-muted.png'
         img = self.buttons['recording'].get_image()
-        img.set_from_file(os.path.join(self.ui_dir, filename))
+        img.set_from_file(os.path.join(get_ui_dir(), filename))
 
     def on_connetcion_btn_toggled(self, widget):
         # if failed: widget.set_active(False)
