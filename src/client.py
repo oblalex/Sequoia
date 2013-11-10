@@ -83,6 +83,152 @@ class KeysSelectingWindow(object):
         self.wnd.show()
 
 
+class ConferencesWindow(object):
+
+    def __init__(self, info):
+        self.info = info
+        gladefile = os.path.join(get_ui_dir(), "conferences.glade")
+        root = gtk.Builder()
+        root.add_from_file(gladefile)
+        self.wnd = root.get_object('confs_wnd')
+        self.tree = self._init_conferences_tree(root, self.info)
+
+        signals = {
+            'on_add_btn_clicked': self.on_add_btn_clicked,
+            'on_delete_btn_clicked': self.on_delete_btn_clicked,
+            'on_ok_btn_clicked': self.on_ok_btn_clicked,
+        }
+        root.connect_signals(signals)
+
+    def _init_conferences_tree(self, root, info):
+        store = gtk.ListStore(str, str, int)
+        model = gtk.TreeModelSort(store)
+        model.set_sort_column_id(0, gtk.SORT_ASCENDING)
+
+        tree = root.get_object('confs_tree')
+        tree.set_model(model)
+        self._init_columns(tree)
+
+        conferences = info.setdefault('conferences', [])
+        for conference in conferences:
+            store.append(conference)
+        if conferences:
+            tree.set_cursor(info.setdefault('current', 0))
+
+        return tree
+
+    def _init_columns(self, tree):
+        column = self._create_column("Name", 0)
+        tree.append_column(column)
+
+        column = self._create_column("Address", 1)
+        tree.append_column(column)
+
+        column = self._create_column("Port", 2, type_func=int, resizable=False)
+        tree.append_column(column)
+
+    def _create_column(self, name, id, type_func=str, resizable=True):
+
+        def edited_callback(cell, path, new_value):
+            if not new_value:
+                self._show_error("Value cannot be empty.")
+                return
+            try:
+                value = type_func(new_value)
+            except ValueError:
+                msg = "'{0}' is wrong {1} value.".format(
+                    new_value, type_func.__name__)
+                self._show_error(msg)
+            else:
+                self._get_row(path)[id] = value
+
+        renderer = gtk.CellRendererText()
+        renderer.connect('edited', edited_callback)
+        renderer.set_property('editable', True)
+
+        column = gtk.TreeViewColumn(name, renderer, text=id)
+        column.set_sort_column_id(id)
+        column.set_resizable(resizable)
+        return column
+
+    def _get_row_cursor(self, path):
+        return self.tree.get_model().convert_path_to_child_path(path)
+
+    def _get_row(self, path):
+        return self.store[self._get_row_cursor(path)]
+
+    def _show_error(self, message):
+        md = gtk.MessageDialog(
+            self.wnd, gtk.DIALOG_DESTROY_WITH_PARENT,
+            gtk.MESSAGE_ERROR, gtk.BUTTONS_CLOSE,
+            message)
+        md.run()
+        md.destroy()
+
+    @property
+    def store(self):
+        return self.tree.get_model().get_model()
+
+    @property
+    def current_cursor(self):
+        cursor = self.tree.get_cursor()[0]
+        if cursor is not None:
+            (cursor, ) = cursor
+        return cursor
+
+    def on_add_btn_clicked(self, widget):
+
+        model = self.tree.get_model()
+        if len(model) > 0:
+            cursor = self.current_cursor
+            selected_name, address, port = model[cursor]
+
+            chunks = selected_name.rsplit('.', 1)
+            try:
+                suffix = int(chunks[1]) + 1
+            except:
+                suffix = 1
+
+            while True:
+                name = "{0}.{1}".format(chunks[0], suffix)
+                try:
+                    next_name = model[cursor + 1][0]
+                except IndexError:
+                    break
+                if name != next_name:
+                    break
+                suffix += 1
+                cursor += 1
+
+            data = (name, address, port)
+            cursor += 1
+        else:
+            data = ("Default", "192.168.1.2", 9876)
+            cursor = 0
+
+        self.store.append(data)
+        self.tree.set_cursor(cursor)
+
+    def on_delete_btn_clicked(self, widget):
+        if not len(self.store):
+            return
+        if self.current_cursor is None:
+            return
+        (cursor, ) = self._get_row_cursor(self.current_cursor)
+        del self.store[cursor]
+        if len(self.store) and self.current_cursor is None:
+            self.tree.set_cursor(0)
+
+    def on_ok_btn_clicked(self, widget):
+        sorted_store = self.tree.get_model()
+        self.info['conferences'] = [(r[0], r[1], r[2]) for r in sorted_store]
+        self.info['current'] = self.current_cursor
+        self.wnd.destroy()
+
+    def show(self):
+        self.wnd.show()
+
+
 class MainWindow(object):
 
     def __init__(self):
@@ -91,7 +237,7 @@ class MainWindow(object):
         root = gtk.Builder()
         root.add_from_file(gladefile)
 
-        self.participants_store = self._init_participants_tree(root)
+        self.store = self._init_participants_tree(root)
         self.buttons = {
             'connection': root.get_object('connetcion_btn'),
             'cipher': root.get_object('cipher_btn'),
@@ -112,9 +258,6 @@ class MainWindow(object):
         self.wnd.show()
 
     def _init_settings(self):
-        settings = gtk.settings_get_default()
-        settings.props.gtk_button_images = True
-
         dirname = os.path.join(os.path.expanduser("~"), ".config", "sequoia")
         if not os.path.exists(dirname):
             os.makedirs(dirname)
@@ -140,14 +283,9 @@ class MainWindow(object):
 
         return store
 
-    # for row in self.participants_store:
-    #     if row[0] == 'baz':
-    #         self.participants_store.remove(row.iter)
-    #         break
-    # self.participants_store.append(['baz', ])
-
     def on_conferences_btn_clicked(self, widget):
-        pass
+        conf_info = self.settings.setdefault('conferences_info', {})
+        ConferencesWindow(conf_info).show()
 
     def on_keys_bnt_clicked(self, widget):
         key_paths = self.settings.setdefault('keys', {})
@@ -234,4 +372,5 @@ def main():
 
 if __name__ == "__main__":
     log.startLogging(sys.stdout)
+    gtk.settings_get_default().props.gtk_button_images = True
     main()

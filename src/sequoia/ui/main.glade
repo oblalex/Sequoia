@@ -29,11 +29,18 @@
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <child>
-          <object class="GtkTreeView" id="participants_tree">
+          <object class="GtkScrolledWindow" id="scrolledwindow1">
             <property name="visible">True</property>
             <property name="can_focus">True</property>
-            <property name="headers_clickable">False</property>
-            <property name="rules_hint">True</property>
+            <property name="hscrollbar_policy">automatic</property>
+            <property name="vscrollbar_policy">automatic</property>
+            <child>
+              <object class="GtkTreeView" id="participants_tree">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="rules_hint">True</property>
+              </object>
+            </child>
           </object>
           <packing>
             <property name="expand">True</property>
@@ -138,4 +145,5 @@
     <property name="can_focus">False</property>
     <property name="pixbuf">microphone.png</property>
   </object>
+  <object class="GtkStatusIcon" id="statusicon"/>
 </interface>

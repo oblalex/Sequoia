@@ -40,7 +40,8 @@ def main():
     host, cport, mport = parse_args()
 
     Registry.DBPOOL = adbapi.ConnectionPool(
-        'sqlite3', "sequoia/tests/auth/sequoia.db", check_same_thread=False)
+        'sqlite3', "sequoia/tests/auth/server_1/database.db",
+        check_same_thread=False)
 
     mixer = AudioMixer()
     reactor.callWhenRunning(mixer.start)
@@ -48,9 +49,9 @@ def main():
     media_tx = ServerMediaProtocol(speexxx, mixer)
     clients_factory = ServerClientsFactory(media_tx)
     ctx_factory = ServerContextFactory(
-        "sequoia/tests/auth/server.key",
-        "sequoia/tests/auth/server.crt",
-        "sequoia/tests/auth/root_ca.crt")
+        "sequoia/tests/auth/server_1/private_key.pem",
+        "sequoia/tests/auth/server_1/certificate.pem",
+        "sequoia/tests/auth/root/root_ca.crt")
 
     clients_listener = reactor.listenSSL(cport, clients_factory, ctx_factory,
         interface=host)
